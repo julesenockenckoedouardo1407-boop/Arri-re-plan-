@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#050505">
+<meta name="description" content="Jules arrière plan — caméra photo et vidéo.">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+<title>Jules arrière plan</title>
+</head>
+<body>
+<main class="app">
+  <video id="preview" autoplay playsinline muted></video>
+  <canvas id="canvas" hidden></canvas>
+
+  <div class="topbar">
+    <button id="installBtn" class="small hidden">Installer</button>
+    <span id="status">Caméra prête</span>
+    <button id="switchBtn" class="small" aria-label="Changer de caméra">↻</button>
+  </div>
+
+  <div class="center-message" id="message">
+    <div class="message-card">
+      <strong>Jules arrière plan</strong>
+      <span>Autorise la caméra pour commencer.</span>
+      <button id="startBtn" class="primary">Activer la caméra</button>
+    </div>
+  </div>
+
+  <div class="bottom">
+    <button id="galleryBtn" class="tool" aria-label="Galerie">▣<small>Galerie</small></button>
+    <button id="captureBtn" class="capture photo" aria-label="Prendre une photo"></button>
+    <button id="recordBtn" class="tool" aria-label="Enregistrer une vidéo">●<small>Vidéo</small></button>
+  </div>
+
+  <div id="gallery" class="gallery hidden">
+    <div class="gallery-head">
+      <strong>Mes captures</strong>
+      <button id="closeGallery">✕</button>
+    </div>
+    <div id="items" class="items"></div>
+    <p id="empty">Aucune capture enregistrée.</p>
+  </div>
+
+  <div id="permissionHelp" class="permission hidden">
+    Impossible d'accéder à la caméra. Vérifie l'autorisation caméra et ouvre l'application avec une adresse HTTPS.
+  </div>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
