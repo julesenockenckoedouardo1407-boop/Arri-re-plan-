@@ -1,11 +1,27 @@
-# Jules arrière plan V2
+# Jules arrière plan V3
 
-Caméra photo/vidéo avec sélection d’arrière-plan.
+Version améliorée de l'application caméra.
 
-Tous les fichiers sont directement à la racine : aucun sous-dossier.
+CORRECTIONS :
+- changement caméra avant/arrière avec `facingMode` explicite ;
+- la caméra arrière ne dépend plus de `ideal` ;
+- microphone non obligatoire pour ouvrir la caméra ;
+- composition du détourage corrigée : le décor reste derrière la personne ;
+- nouveaux décors scolaires en qualité vectorielle locale.
 
-Fonctions : caméra avant/arrière, plusieurs décors intégrés, ajout d'une image du téléphone, détourage automatique lorsque MediaPipe est disponible, photos, vidéos, galerie locale, IndexedDB, installation PWA et Service Worker.
+DÉCORS SCOLAIRES :
+- Salle de classe
+- Tableau pédagogique
+- Bibliothèque
+- Cour d'école
+- Laboratoire
+- Salle informatique
 
-Déploiement : décompresser, envoyer tous les fichiers à la racine du dépôt GitHub, activer GitHub Pages, puis ouvrir en HTTPS et autoriser caméra/microphone.
+AUTRES :
+- Coucher de soleil
+- Bureau moderne
+- Ajout d'une image personnelle
 
-La segmentation utilise MediaPipe Selfie Segmentation depuis jsDelivr lors de la première utilisation. Une connexion peut donc être nécessaire pour récupérer son moteur la première fois.
+Tous les fichiers sont à la racine, aucun sous-dossier.
+
+Déploiement : décompresser, envoyer tout à la racine du dépôt GitHub, activer GitHub Pages, puis ouvrir l'adresse HTTPS.
