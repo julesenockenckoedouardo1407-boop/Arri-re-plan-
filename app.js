@@ -1,109 +1,22 @@
-const $=id=>document.getElementById(id);
-const camera=$("camera"),output=$("output"),ctx=output.getContext("2d"),work=$("work"),wctx=work.getContext("2d"),maskCanvas=$("mask"),mctx=maskCanvas.getContext("2d"),personCanvas=$("person"),pctx=personCanvas.getContext("2d");
-let stream=null,facing="user",running=false,segmentation=null,recorder=null,chunks=[],db=null,customImage=null;
-let background={type:"none",src:""};let activeCategory="tous";
-
-const presets=[
- {name:"Aucun",cat:"tous",src:"none"},{name:"Salle de classe",cat:"scolaire",src:"classroom.svg"},
- {name:"Tableau pédagogique",cat:"scolaire",src:"blackboard.svg"},{name:"Bibliothèque",cat:"scolaire",src:"library.svg"},
- {name:"Cour d'école",cat:"scolaire",src:"schoolyard.svg"},{name:"Laboratoire",cat:"scolaire",src:"science-lab.svg"},
- {name:"Salle informatique",cat:"scolaire",src:"computer-lab.svg"},{name:"Coucher de soleil",cat:"nature",src:"sunset.svg"},
- {name:"Bureau moderne",cat:"moderne",src:"office.svg"}
-];
-
-function buildPicker(){
- const box=$("choices");box.innerHTML="";
- presets.filter(p=>activeCategory==="tous"||p.cat===activeCategory).forEach(p=>{
-  const b=document.createElement("button");b.className="choice";
-  if(p.src==="none")b.style.background="#111";
-  else b.style.backgroundImage=`url("${p.src}")`;
-  const s=document.createElement("span");s.textContent=p.name;b.appendChild(s);
-  b.onclick=()=>{background={type:p.src==="none"?"none":"image",src:p.src};customImage=null;document.querySelectorAll(".choice").forEach(x=>x.classList.remove("selected"));b.classList.add("selected");$("backgrounds").classList.add("hidden");$("status").textContent=p.name};
-  box.appendChild(b);
- });
-}
-buildPicker();
-document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>{document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));t.classList.add("active");activeCategory=t.dataset.cat;buildPicker()});
-
-function openDB(){return new Promise((resolve,reject)=>{const r=indexedDB.open("JulesArrierePlanDB",1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains("captures"))r.result.createObjectStore("captures",{keyPath:"id",autoIncrement:true})};r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
-async function saveCapture(blob,type){if(!db)db=await openDB();const tx=db.transaction("captures","readwrite");tx.objectStore("captures").add({blob,type,date:Date.now()});await new Promise((ok,no)=>{tx.oncomplete=ok;tx.onerror=()=>no(tx.error)})}
-async function loadGallery(){if(!db)db=await openDB();const r=db.transaction("captures","readonly").objectStore("captures").getAll();r.onsuccess=()=>{const box=$("items");box.innerHTML="";const a=r.result.reverse();$("empty").classList.toggle("hidden",a.length>0);a.forEach(x=>{const u=URL.createObjectURL(x.blob),f=document.createElement("figure");f.innerHTML=x.type==="photo"?`<a href="${u}" download="jules-photo-${x.id}.jpg"><img src="${u}" alt="Photo"></a>`:`<a href="${u}" download="jules-video-${x.id}.webm"><video src="${u}" controls playsinline></video></a>`;const c=document.createElement("figcaption");c.textContent=new Date(x.date).toLocaleString("fr-FR");f.appendChild(c);box.appendChild(f)})}}
-
-async function startCamera(){
- try{
-  if(!navigator.mediaDevices?.getUserMedia)throw Error("getUserMedia indisponible");
-  if(stream)stream.getTracks().forEach(t=>t.stop());
-  // Exact facingMode fixes browsers that ignore the previous "ideal" constraint.
-  stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facing,width:{ideal:1280},height:{ideal:720}},audio:false});
-  camera.srcObject=stream;await camera.play();running=true;$("startPanel").classList.add("hidden");$("error").classList.add("hidden");
-  $("status").textContent=facing==="user"?"Caméra avant":"Caméra arrière";initSegmentation();requestAnimationFrame(renderLoop);
- }catch(e){
-  if(facing==="environment"){
-   try{stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{exact:"environment"}},audio:false})}catch(_){showError("La caméra arrière n'est pas disponible dans ce navigateur/appareil.");return}
-  }else{showError("Impossible d'accéder à la caméra. Vérifie l'autorisation caméra et HTTPS.");return}
-  camera.srcObject=stream;await camera.play();running=true;$("startPanel").classList.add("hidden");initSegmentation();requestAnimationFrame(renderLoop);
- }
-}
-
-function initSegmentation(){
- if(segmentation||!window.SelfieSegmentation)return;
- segmentation=new SelfieSegmentation({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`});
- segmentation.setOptions({modelSelection:1});segmentation.onResults(renderResult);
-}
-
-function resizeCanvases(){
- const W=Math.max(1,innerWidth),H=Math.max(1,innerHeight);
- [output,work,maskCanvas,personCanvas].forEach(c=>{c.width=W;c.height=H});
-}
-function fit(W,H,iw,ih){const s=Math.max(W/iw,H/ih);return{w:iw*s,h:ih*s,x:(W-iw*s)/2,y:(H-ih*s)/2}}
-function drawCamera(){
- resizeCanvases();const W=output.width,H=output.height,q=fit(W,H,camera.videoWidth||W,camera.videoHeight||H);
- wctx.clearRect(0,0,W,H);wctx.save();
- if(facing==="user"){wctx.translate(W,0);wctx.scale(-1,1);wctx.drawImage(camera,-q.x-q.w,q.y,q.w,q.h)}
- else wctx.drawImage(camera,q.x,q.y,q.w,q.h);
- wctx.restore();
-}
-const bgCache={};
-function getBg(src){if(!bgCache[src]){const i=new Image();i.src=src;bgCache[src]=i}return bgCache[src]}
-function drawBackground(){
- const W=output.width,H=output.height;
- if(background.type==="none"){ctx.drawImage(work,0,0);return}
- if(background.type==="custom"&&customImage){ctx.drawImage(customImage,0,0,W,H);return}
- const img=getBg(background.src);
- if(img.complete)ctx.drawImage(img,0,0,W,H);else{ctx.fillStyle="#18252c";ctx.fillRect(0,0,W,H)}
-}
-function renderResult(result){
- drawCamera();
- if(background.type==="none"){ctx.clearRect(0,0,output.width,output.height);ctx.drawImage(work,0,0);return}
- // Correct composition: full background first, then camera pixels clipped by the person mask.
- drawBackground();
- mctx.clearRect(0,0,output.width,output.height);mctx.drawImage(result.segmentationMask,0,0,output.width,output.height);
- pctx.clearRect(0,0,output.width,output.height);pctx.drawImage(work,0,0);
- pctx.globalCompositeOperation="destination-in";pctx.drawImage(maskCanvas,0,0);pctx.globalCompositeOperation="source-over";
- ctx.drawImage(personCanvas,0,0);
-}
-async function renderLoop(){if(!running)return;if(segmentation){try{await segmentation.send({image:camera})}catch(e){renderFallback()}}else renderFallback();requestAnimationFrame(renderLoop)}
-function renderFallback(){resizeCanvases();ctx.clearRect(0,0,output.width,output.height);drawCamera()}
-
-$("start").onclick=startCamera;
-$("switch").onclick=()=>{facing=facing==="user"?"environment":"user";startCamera()};
-$("bgBtn").onclick=()=>$("backgrounds").classList.remove("hidden");
-$("closePicker").onclick=()=>$("backgrounds").classList.add("hidden");
-$("gallery").onclick=async()=>{$("galleryPanel").classList.remove("hidden");await loadGallery()};
-$("closeGallery").onclick=()=>$("galleryPanel").classList.add("hidden");
-$("customBg").onchange=e=>{const file=e.target.files[0];if(!file)return;const url=URL.createObjectURL(file);customImage=new Image();customImage.onload=()=>{background={type:"custom"};$("backgrounds").classList.add("hidden");$("status").textContent="Arrière-plan personnalisé"};customImage.src=url};
-
-$("photo").onclick=async()=>{if(!running)return;const blob=await new Promise(r=>output.toBlob(r,"image/jpeg",.94));if(blob){await saveCapture(blob,"photo");$("status").textContent="Photo enregistrée";setTimeout(()=>{$("status").textContent=facing==="user"?"Caméra avant":"Caméra arrière"},1200)}};
-$("video").onclick=async()=>{
- if(!running)return;if(recorder?.state==="recording"){recorder.stop();return}
- const capture=output.captureStream(30);const mime=MediaRecorder.isTypeSupported("video/webm;codecs=vp9,opus")?"video/webm;codecs=vp9,opus":"video/webm";
- chunks=[];recorder=new MediaRecorder(capture,{mimeType:mime});
- recorder.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};
- recorder.onstop=async()=>{await saveCapture(new Blob(chunks,{type:"video/webm"}),"video");$("video").classList.remove("recording");$("status").textContent="Vidéo enregistrée"};
- recorder.start();$("video").classList.add("recording");$("status").textContent="● Enregistrement";
-};
-let installEvent=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvent=e;$("install").classList.remove("hidden")});
-$("install").onclick=async()=>{if(installEvent){installEvent.prompt();await installEvent.userChoice;installEvent=null;$("install").classList.add("hidden")}};
-if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("./sw.js").catch(console.error));
-window.addEventListener("resize",()=>{if(running)resizeCanvases()});openDB().catch(console.error);
-function showError(t){$("error").textContent=t;$("error").classList.remove("hidden");setTimeout(()=>$("error").classList.add("hidden"),7000)}
+const $=x=>document.getElementById(x),cam=$("camera"),out=$("output"),ctx=out.getContext("2d");let stream,facing="user",seg,segOK=false,bgImg=null,processed=false,busy=false,raf,db;const work=document.createElement("canvas"),mask=document.createElement("canvas"),person=document.createElement("canvas");const wx=work.getContext("2d"),mx=mask.getContext("2d"),px=person.getContext("2d");const B=[["classroom.svg","Classe moderne","Scolaire"],["blackboard.svg","Tableau","Scolaire"],["library.svg","Bibliothèque","Scolaire"],["school-entrance.svg","Entrée","Scolaire"],["science-lab.svg","Laboratoire","Scolaire"],["computer-lab.svg","Informatique","Scolaire"],["schoolyard.svg","Cour d'école","Scolaire"],["nature.svg","Nature","Nature"],["sunset.svg","Coucher de soleil","Nature"],["office.svg","Bureau","Moderne"]];let cat="Tous";
+function resize(){[out,work,mask,person].forEach(c=>{c.width=innerWidth;c.height=innerHeight})}resize();onresize=resize;
+function status(t){$("status").textContent=t}function toast(t){let x=$("toast");x.textContent=t;x.classList.add("on");clearTimeout(toast.t);toast.t=setTimeout(()=>x.classList.remove("on"),1800)}
+function cover(c,s,mir=false){let sw=s.videoWidth||s.naturalWidth,sh=s.videoHeight||s.naturalHeight;if(!sw)return;let z=Math.max(c.width/sw,c.height/sh),w=sw*z,h=sh*z;c.save();if(mir){c.translate(c.width,0);c.scale(-1,1)}c.clearRect(0,0,c.width,c.height);c.drawImage(s,(c.width-w)/2,(c.height-h)/2,w,h);c.restore()}
+function raw(){out.style.opacity=0;cam.style.opacity=1;cam.style.transform=facing==="user"?"scaleX(-1)":"none"}
+function ready(){if(processed){out.style.opacity=1;cam.style.opacity=0}}
+async function getCam(mode){let tries=[{video:{facingMode:{exact:mode},width:{ideal:1280},height:{ideal:720}},audio:false},{video:{facingMode:{ideal:mode},width:{ideal:1280},height:{ideal:720}},audio:false}];let err;for(let c of tries)try{return await navigator.mediaDevices.getUserMedia(c)}catch(e){err=e}try{let ds=await navigator.mediaDevices.enumerateDevices(),vs=ds.filter(d=>d.kind==="videoinput"),d=vs.find(x=>mode==="environment"?/back|rear|environment|arrière/i.test(x.label):/front|user|avant/i.test(x.label));if(d)return await navigator.mediaDevices.getUserMedia({video:{deviceId:{exact:d.deviceId}},audio:false})}catch(e){err=e}throw err}
+async function stop(){if(raf)cancelAnimationFrame(raf);if(stream)stream.getTracks().forEach(t=>t.stop());stream=null;busy=false}
+async function start(){await stop();raw();processed=false;status(facing==="user"?"Ouverture caméra avant…":"Ouverture caméra arrière…");try{stream=await getCam(facing);cam.srcObject=stream;await cam.play();$("start").classList.add("hide");status("Caméra active");setTimeout(()=>{if(!processed)raw()},1800);if(window.SelfieSegmentation){try{if(!seg){seg=new SelfieSegmentation({locateFile:f=>`https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`});seg.setOptions({modelSelection:1});seg.onResults(render)}segOK=true}catch(e){segOK=false}}loop()}catch(e){console.error(e);$("start").classList.remove("hide");status("Caméra indisponible");toast("Autorise la caméra puis réessaie")}}
+function loop(){let token=Date.now();const f=async()=>{if(!stream)return;if(segOK&&!busy&&cam.readyState>=2){busy=true;try{await seg.send({image:cam})}catch(e){segOK=false;busy=false;raw();status("Caméra active — détourage indisponible")}}else if(!segOK)raw();raf=requestAnimationFrame(f)};raf=requestAnimationFrame(f)}
+function render(r){try{ctx.clearRect(0,0,out.width,out.height);if(bgImg)cover(ctx,bgImg);else{ctx.fillStyle="#101827";ctx.fillRect(0,0,out.width,out.height)}mx.clearRect(0,0,mask.width,mask.height);mx.drawImage(r.segmentationMask,0,0,mask.width,mask.height);px.clearRect(0,0,person.width,person.height);cover(px,cam,facing==="user");px.save();px.globalCompositeOperation="destination-in";px.drawImage(mask,0,0);px.restore();ctx.drawImage(person,0,0);processed=true;ready();status(bgImg?"Décor actif":"Détourage actif")}catch(e){raw()}busy=false}
+$("startBtn").onclick=start;$("switch").onclick=async()=>{facing=facing==="user"?"environment":"user";await start()};
+function drawBgs(){let box=$("bgs");box.innerHTML="";B.filter(x=>cat==="Tous"||x[2]===cat).forEach(x=>{let b=document.createElement("button");let i=new Image();i.src=x[0];let s=document.createElement("span");s.textContent=x[1];b.append(i,s);b.onclick=()=>{let z=new Image();z.onload=()=>{bgImg=z;drawBgs();toast("Décor activé")};z.src=x[0]};box.append(b)})}
+$("tabs").innerHTML=["Tous","Scolaire","Nature","Moderne"].map(x=>`<button data-c="${x}" class="${x==="Tous"?"active":""}">${x}</button>`).join("");document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{document.querySelectorAll("#tabs button").forEach(x=>x.classList.remove("active"));b.classList.add("active");cat=b.dataset.c;drawBgs()});drawBgs();
+$("bg").onclick=()=>{$("decor").classList.remove("hide")};$("closeD").onclick=()=>$("decor").classList.add("hide");
+$("custom").onchange=e=>{let f=e.target.files[0];if(!f)return;let i=new Image();i.onload=()=>{bgImg=i;toast("Image personnalisée activée")};i.src=URL.createObjectURL(f)};
+function openDB(){return new Promise((ok,no)=>{let q=indexedDB.open("jap-v4",1);q.onupgradeneeded=()=>q.result.createObjectStore("m",{keyPath:"id",autoIncrement:true});q.onsuccess=()=>{db=q.result;ok()};q.onerror=()=>no(q.error)})}
+async function save(blob,type){if(!db)await openDB();return new Promise((ok,no)=>{let t=db.transaction("m","readwrite");t.objectStore("m").add({blob,type,date:Date.now()});t.oncomplete=ok;t.onerror=()=>no(t.error)})}
+$("photo").onclick=async()=>{if(!stream)return toast("Ouvre la caméra");let c=document.createElement("canvas");c.width=out.width;c.height=out.height;if(processed)c.getContext("2d").drawImage(out,0,0);else cover(c,cam,facing==="user");c.toBlob(async b=>{await save(b,"image");toast("Photo enregistrée")},"image/jpeg",.92)};
+let rec,ch=[];$("video").onclick=()=>{if(!stream)return toast("Ouvre la caméra");if(rec?.state==="recording"){rec.stop();$("video").innerHTML="🎥<small>Vidéo</small>";return}let c=document.createElement("canvas");c.width=out.width;c.height=out.height;let cs=c.captureStream(30);ch=[];rec=new MediaRecorder(cs);rec.ondataavailable=e=>e.data.size&&ch.push(e.data);rec.onstop=async()=>{await save(new Blob(ch,{type:"video/webm"}),"video");toast("Vidéo enregistrée")};rec.start();$("video").innerHTML="⏹️<small>Arrêter</small>";let draw=()=>{if(rec.state!=="recording")return;let x=c.getContext("2d");if(processed)x.drawImage(out,0,0);else cover(c,cam,facing==="user");requestAnimationFrame(draw)};draw()};
+async function load(){if(!db)await openDB();let q=db.transaction("m","readonly").objectStore("m").getAll();q.onsuccess=()=>{$("items").innerHTML="";q.result.sort((a,b)=>b.date-a.date).forEach(x=>{let u=URL.createObjectURL(x.blob),e=x.type==="video"?document.createElement("video"):document.createElement("img");e.src=u;if(x.type==="video"){e.controls=true;e.playsInline=true}$("items").append(e)})}}
+$("gal").onclick=()=>{$("gallery").classList.remove("hide");load()};$("closeG").onclick=()=>$("gallery").classList.add("hide");$("clear").onclick=async()=>{if(!db)await openDB();db.transaction("m","readwrite").objectStore("m").clear();setTimeout(load,200)};if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(console.warn);

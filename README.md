@@ -1,27 +1,10 @@
-# Jules arrière plan V3
-
-Version améliorée de l'application caméra.
-
-CORRECTIONS :
-- changement caméra avant/arrière avec `facingMode` explicite ;
-- la caméra arrière ne dépend plus de `ideal` ;
-- microphone non obligatoire pour ouvrir la caméra ;
-- composition du détourage corrigée : le décor reste derrière la personne ;
-- nouveaux décors scolaires en qualité vectorielle locale.
-
-DÉCORS SCOLAIRES :
-- Salle de classe
-- Tableau pédagogique
-- Bibliothèque
-- Cour d'école
-- Laboratoire
-- Salle informatique
-
-AUTRES :
-- Coucher de soleil
-- Bureau moderne
-- Ajout d'une image personnelle
-
-Tous les fichiers sont à la racine, aucun sous-dossier.
-
-Déploiement : décompresser, envoyer tout à la racine du dépôt GitHub, activer GitHub Pages, puis ouvrir l'adresse HTTPS.
+# Jules Arrière-Plan V4
+Correction de l'écran noir : la vidéo caméra est affichée immédiatement. Le canvas de détourage reste transparent jusqu'à la première image traitée. En cas d'échec de MediaPipe, l'application reste utilisable comme caméra normale.
+- caméra avant/arrière
+- décors scolaires, nature et modernes
+- image personnalisée
+- photo/vidéo
+- galerie locale
+- PWA installable
+- tous les fichiers à la racine
+- cache du code CDN après premier chargement réussi
