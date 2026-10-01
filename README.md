@@ -1,10 +1,6 @@
-# Jules Arrière-Plan V4
-Correction de l'écran noir : la vidéo caméra est affichée immédiatement. Le canvas de détourage reste transparent jusqu'à la première image traitée. En cas d'échec de MediaPipe, l'application reste utilisable comme caméra normale.
-- caméra avant/arrière
-- décors scolaires, nature et modernes
-- image personnalisée
-- photo/vidéo
-- galerie locale
-- PWA installable
-- tous les fichiers à la racine
-- cache du code CDN après premier chargement réussi
+# Jules Arrière-Plan V5
+Deux corrections majeures :
+1. La caméra brute ne disparaît plus après environ une seconde. Le canvas traité ne devient visible qu'après réception d'un résultat valide de segmentation.
+2. Les décors sont préchargés au clic avec `Image.onload`; le décor choisi est réellement utilisé dans le rendu, puis le sujet est redessiné au-dessus.
+
+La caméra reste donc utilisable même si le détourage échoue. Tous les fichiers sont à la racine.
